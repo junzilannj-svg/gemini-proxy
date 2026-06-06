@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   // 这里的目标地址是 Google 官方接口
-  const targetUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const targetUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
   
   const apiKey = req.headers['x-goog-api-key'];
   if (!apiKey) {
