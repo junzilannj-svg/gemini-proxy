@@ -5,22 +5,23 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 这里的目标地址是 Google 官方接口
-  const targetUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
+  // 核心改动：req.url 会自带 "/v1beta/models/..." 这样的完整路径
+  // 我们直接把它拼接到 Google 官方域名后面，实现 100% 透明转发
+  const targetUrl = 'https://generativelanguage.googleapis.com' + req.url;
   
   const apiKey = req.headers['x-goog-api-key'];
   if (!apiKey) {
-    return res.status(400).json({ error: "Missing API Key", message: "请在 Header 中包含 x-goog-api-key" });
+    return res.status(400).json({ error: "Missing API Key" });
   }
 
   try {
     const response = await fetch(targetUrl, {
-      method: 'POST',
+      method: req.method,
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey
       },
-      body: JSON.stringify(req.body)
+      body: req.method === 'POST' ? JSON.stringify(req.body) : null
     });
 
     const data = await response.json();
