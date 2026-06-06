@@ -1,17 +1,28 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-goog-api-key');
+export const config = {
+  runtime: 'edge', // 启用极速边缘计算引擎
+};
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+export default async function handler(req) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-goog-api-key',
+  };
 
-  // 核心改动：req.url 会自带 "/v1beta/models/..." 这样的完整路径
-  // 我们直接把它拼接到 Google 官方域名后面，实现 100% 透明转发
-  const targetUrl = 'https://generativelanguage.googleapis.com' + req.url;
-  
-  const apiKey = req.headers['x-goog-api-key'];
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const url = new URL(req.url);
+  // 拼接 Google 官方地址
+  const targetUrl = 'https://generativelanguage.googleapis.com' + url.pathname + url.search;
+
+  const apiKey = req.headers.get('x-goog-api-key');
   if (!apiKey) {
-    return res.status(400).json({ error: "Missing API Key" });
+    return new Response(JSON.stringify({ error: 'Missing API Key' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 
   try {
@@ -21,12 +32,21 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey
       },
-      body: req.method === 'POST' ? JSON.stringify(req.body) : null
+      body: req.method === 'POST' ? await req.text() : null
     });
 
-    const data = await response.json();
-    res.status(response.status).json(data);
+    // 关键：直接将 Google 的数据流管道（Stream）无缝接到用户的电脑上
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': response.headers.get('Content-Type') || 'text/event-stream'
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: "Proxy Error", details: error.message });
+    return new Response(JSON.stringify({ error: 'Proxy Error', details: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 }
